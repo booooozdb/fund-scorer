@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>基金投资评分系统 - A股多因子投资决策</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-icon">📊</span>
+                <div>
+                    <h1>基金投资评分系统</h1>
+                    <p class="subtitle">A股多因子融合 · 长期+短期双模式</p>
+                </div>
+            </div>
+            <div class="market-badge" id="marketBadge">
+                <span class="status-dot"></span>
+                <span id="marketStatusText">--</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- Search Section -->
+        <section class="search-section">
+            <!-- Invest Type Toggle -->
+            <div class="type-toggle-row">
+                <div class="type-toggle" id="typeToggle">
+                    <button class="type-btn active" data-type="long" onclick="switchType('long')">
+                        <span class="type-icon">📈</span>
+                        <span class="type-label">长期投资</span>
+                        <span class="type-hint">估值+趋势</span>
+                    </button>
+                    <button class="type-btn" data-type="short" onclick="switchType('short')">
+                        <span class="type-icon">⚡</span>
+                        <span class="type-label">短期投资</span>
+                        <span class="type-hint">目标+5%</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="search-bar">
+                <input
+                    type="text" id="fundCodeInput" class="search-input"
+                    placeholder="输入基金代码 / 或输入 宽基 / 策略 / 行业"
+                    maxlength="10" autocomplete="off"
+                >
+                <button id="searchBtn" class="search-btn" onclick="searchFund()">
+                    <span class="btn-text">🔍 查询评分</span>
+                    <span class="btn-loading" style="display:none">
+                        <svg class="spinner" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4"/></svg>
+                        查询中...
+                    </span>
+                </button>
+            </div>
+            <div class="search-tags">
+                <span class="tag-label">快捷入口：</span>
+                <button class="tag-btn" onclick="quickSearch('宽基')">宽基</button>
+                <button class="tag-btn" onclick="quickSearch('策略')">策略</button>
+                <button class="tag-btn" onclick="quickSearch('行业')">行业</button>
+                <button class="tag-btn tag-btn-code" onclick="quickSearch('510300')">沪深300</button>
+                <button class="tag-btn tag-btn-code" onclick="quickSearch('588000')">科创50</button>
+            </div>
+        </section>
+
+        <!-- Error / Warning Banners -->
+        <div id="errorBanner" class="error-banner" style="display:none">
+            <span id="errorMessage"></span>
+            <button class="error-close" onclick="dismissError()">✕</button>
+        </div>
+        <div id="warningBanner" class="warning-banner" style="display:none">
+            <span>⚠️ <span id="warningMessage"></span></span>
+        </div>
+
+        <!-- Loading Overlay for Category -->
+        <div id="loadingOverlay" class="loading-overlay" style="display:none">
+            <div class="loading-content">
+                <svg class="spinner-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4"/></svg>
+                <p id="loadingText">正在计算评分...</p>
+            </div>
+        </div>
+
+        <!-- Single Fund Dashboard -->
+        <div id="dashboard" class="dashboard" style="display:none">
+            <!-- Top Row: Gauge + Fund Info -->
+            <section class="top-row">
+                <div class="card gauge-card">
+                    <h2 class="card-title" id="scoreTypeTitle">综合评分 · 长期</h2>
+                    <div class="gauge-container">
+                        <svg viewBox="0 0 200 120" class="gauge-svg" id="gaugeSvg">
+                            <defs>
+                                <filter id="gaugeShadow">
+                                    <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+                                </filter>
+                            </defs>
+                            <g id="gaugeSegments"></g>
+                            <line id="gaugeNeedle" x1="100" y1="100" x2="100" y2="35" stroke="#333" stroke-width="2" stroke-linecap="round" filter="url(#gaugeShadow)"/>
+                            <circle cx="100" cy="100" r="5" fill="#333"/>
+                            <circle cx="100" cy="100" r="2.5" fill="#fff"/>
+                        </svg>
+                        <div class="gauge-value" id="gaugeValue">--</div>
+                        <div class="gauge-label" id="gaugeLabel">请输入基金代码</div>
+                        <div class="gauge-desc" id="gaugeDesc"></div>
+                    </div>
+                </div>
+
+                <div class="card info-card">
+                    <h2 class="card-title" id="fundNameTitle">基金信息</h2>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="info-label">基金代码</span><span class="info-value" id="infoCode">--</span></div>
+                        <div class="info-item"><span class="info-label">最新净值</span><span class="info-value" id="infoNav">--</span></div>
+                        <div class="info-item"><span class="info-label">估算净值</span><span class="info-value" id="infoEstNav">--</span></div>
+                        <div class="info-item"><span class="info-label">估算涨幅</span><span class="info-value" id="infoChange">--</span></div>
+                        <div class="info-item"><span class="info-label">净值日期</span><span class="info-value" id="infoNavDate">--</span></div>
+                        <div class="info-item"><span class="info-label">市场状态</span><span class="info-value" id="infoMarketStatus">--</span></div>
+                    </div>
+                    <div class="quick-metrics" id="quickMetrics">
+                        <div class="metric-chip"><span class="chip-label">RSI(14)</span><span class="chip-value" id="chipRsi">--</span></div>
+                        <div class="metric-chip"><span class="chip-label">年化波动</span><span class="chip-value" id="chipVol">--</span></div>
+                        <div class="metric-chip"><span class="chip-label">5日收益</span><span class="chip-value" id="chipRet5">--</span></div>
+                        <div class="metric-chip"><span class="chip-label">20日收益</span><span class="chip-value" id="chipRet20">--</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Position Sizing Card -->
+            <section class="card position-card" id="positionCard" style="display:none">
+                <h2 class="card-title">💰 仓位建议</h2>
+                <div class="position-display">
+                    <div class="position-main" id="positionMain">
+                        <span class="position-action" id="positionAction">--</span>
+                        <span class="position-multiplier" id="positionMultiplier">--</span>
+                    </div>
+                    <p class="position-desc" id="positionDesc"></p>
+                </div>
+                <!-- Short-term profit probability -->
+                <div class="profit-probability" id="profitProbability" style="display:none">
+                    <div class="prob-bar-wrapper">
+                        <div class="prob-bar" id="probBar"></div>
+                    </div>
+                    <span class="prob-text" id="probText"></span>
+                </div>
+            </section>
+
+            <!-- Factor Breakdown -->
+            <section class="card factor-card">
+                <h2 class="card-title">评分明细</h2>
+                <div class="factor-list" id="factorList"></div>
+                <div class="factor-total">
+                    <span class="total-label">加权总分</span>
+                    <span class="total-score" id="totalScoreDisplay">--</span>
+                </div>
+            </section>
+
+            <!-- Charts -->
+            <section class="card chart-card"><h2 class="card-title">📈 净值走势与均线</h2><div class="chart-wrapper"><canvas id="priceChart"></canvas></div></section>
+            <section class="card chart-card"><h2 class="card-title">📊 MACD (12, 26, 9)</h2><div class="chart-wrapper"><canvas id="macdChart"></canvas></div></section>
+            <section class="card chart-card"><h2 class="card-title">📉 RSI (14)</h2><div class="chart-wrapper"><canvas id="rsiChart"></canvas></div></section>
+        </div>
+
+        <!-- Category Results Table -->
+        <div id="categoryResults" class="category-results" style="display:none">
+            <div class="category-header">
+                <h2 id="categoryTitle">分类评分结果</h2>
+                <span class="category-meta" id="categoryMeta"></span>
+            </div>
+            <div class="category-table-wrapper">
+                <table class="category-table" id="categoryTable">
+                    <thead>
+                        <tr>
+                            <th class="col-rank">#</th>
+                            <th class="col-sector">板块</th>
+                            <th class="col-code">基金代码</th>
+                            <th class="col-score">评分</th>
+                            <th class="col-rec">建议</th>
+                            <th class="col-pos">仓位</th>
+                            <th class="col-recommend">推荐基金</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categoryTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <h3>开始分析基金</h3>
+            <p>输入6位基金代码获取评分，或输入「宽基」「策略」「行业」查看分类排行</p>
+            <div class="example-codes">
+                <span class="example-label">基金示例：</span>
+                <button class="example-btn" onclick="quickSearch('510300')">510300 沪深300ETF</button>
+                <button class="example-btn" onclick="quickSearch('588000')">588000 科创50ETF</button>
+                <button class="example-btn" onclick="quickSearch('159915')">159915 创业板ETF</button>
+                <button class="example-btn" onclick="quickSearch('512800')">512800 银行ETF</button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>⚠️ 评分仅供参考，不构成投资建议。投资有风险，入市需谨慎。</p>
+        <p>数据来源：新浪财经 · 东方财富 · 天天基金</p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
